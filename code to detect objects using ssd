@@ -1,0 +1,54 @@
+import cv2
+import numpy as np
+import urllib.request, urllib.parse, urllib.error
+import imutils
+import ssl
+
+ctx=ssl.create_default_context()
+ctx.check_hostname=False
+ctx.verify_mode=ssl.CERT_NONE
+
+thres=0.45
+nms_threshold = 0.2
+
+url='https://your web cam's IP address/shot.jpg'
+
+objectNmaes=[]
+objectsfile=open('coco.names','rt')
+objectNames=objectsfile.read().strip('\n').split('\n')
+configPath = 'ssd_mobilenet_v3_large_coco_2020_01_14.pbtxt'
+weightsPath = 'frozen_inference_graph.pb'
+
+ssdNet=cv2.dnn_DetectionModel(weightsPath,configPath)
+ssdNet.setInputSize(320,320)
+ssdNet.setInputScale(1.0/127.5)
+ssdNet.setInputMean((127.5,127.5,127.5))
+ssdNet.setInputSwapRB(True)
+
+
+while True:
+    cam=urllib.request.urlopen(url,context=ctx)
+    imgnp=np.array(bytearray(cam.read()),dtype="uint8")
+    img=cv2.imdecode(imgnp,-1)
+    img=imutils.resize(img,width=900)
+    
+    objectIds,confs,bbox=ssdNet.detect(img,confThreshold=thres)
+    bbox=list(bbox)
+    confs=list(np.array(confs).reshape(1,-1)[0])
+    confs=list(map(float,confs))
+    val=cv2.dnn.NMSBoxes(bbox,confs,thres,nms_threshold)
+    
+    for i in val:
+        i=i[0]
+        rec=bbox[i]
+        x,y,w,h=rec[0],rec[1],rec[2],rec[3]
+        img1=cv2.rectangle(img,(x,y),(x+w,y+h),(0,255,0),2)
+        cv2.putText(img,objectNames[objectIds[i][0]-1].upper(),(rec[0]+10,rec[1]+30),cv2.FONT_HERSHEY_COMPLEX,1,(0,255,0),2)
+
+    cv2.imshow("img",img1)
+    
+    key=cv2.waitKey(10)
+    if key==27:            #press esc to exit
+        break
+cam.release()
+cv2.destroyAllWindows()
